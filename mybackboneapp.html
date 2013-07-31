@@ -1,43 +1,29 @@
+<!DOCTYPE HTML>
 <html xmlns:og="http://ogp.me/ns" xmlns:fb="http://www.facebook.com/2008/fbml" lang="en">
 <head>
   <title>Friend Search</title>
+  <!-- load the needed libraries -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
+  <script src="http://ajax.cdnjs.com/ajax/libs/json2/20110223/json2.js"></script>
+  <script src="http://ajax.cdnjs.com/ajax/libs/underscore.js/1.1.6/underscore-min.js"></script>
+  <script src="http://ajax.cdnjs.com/ajax/libs/backbone.js/0.3.3/backbone-min.js"></script>
   <!-- See https://developers.facebook.com/docs/opengraph/ -->
   <meta property="og:title" content="Searching friends with similar interests" />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://obscure-reaches-5782.herokuapp.com/" />
   <meta property="og:site_name" content="Searching friends with similar interests" />
-  <!-- <meta property="og:image" content="http://www.facebookmobileweb.com/hackbook/img/facebook_icon_large.png"/>-->
-  <!-- <meta property="fb:admins" content="20901205" /> -->
-  
-  <!-- See http://developer.apple.com/library/safari/#documentation/appleapplications/reference/SafariHTMLRef/Articles/MetaTags.html -->
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  
-  <!-- See https://developer.apple.com/library/safari/#documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html -->
-  <link rel="apple-touch-icon" href="http://www.facebookmobileweb.com/hackbook/img/iphone_icon.png" />
-  <link rel="apple-touch-startup-image" href="http://www.facebookmobileweb.com/hackbook/img/iphone_splash.png" />
-  <link rel="apple-touch-icon-precomposed" href="http://www.facebookmobileweb.com/hackbook/img/iphone_icon.png" />
-  
-  <!-- See http://davidbcalhoun.com/2010/viewport-metatag for information on the viewport tag. -->
-  <!-- <meta name="viewport" content="initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no" /> -->
-  
   <!-- <link rel="stylesheet" type="text/css" href="css/style.css"> -->
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
-
 </head>
 <body>
 <div id="fb-root"></div>
-<!-- 
 <script>
   window.fbAsyncInit = function() {
   FB.init({
     appId      : '632406803445925', // App ID
-    // channelUrl : 'localhost:80/mybackboneapp.html/channel.html', // Channel File
     status     : true, // check login status
     cookie     : true, // enable cookies to allow the server to access the session
     xfbml      : true  // parse XFBML
   });
-
+  var fb_access_token= '';
   // Here we subscribe to the auth.authResponseChange JavaScript event. This event is fired
   // for any authentication related change, such as login, logout or session refresh. This means that
   // whenever someone who was previously logged out tries to log in again, the correct case below 
@@ -48,7 +34,7 @@
       // The response object is returned with a status field that lets the app know the current
       // login status of the person. In this case, we're handling the situation where they 
       // have logged in to the app.
-      testAPI();
+      // testAPI();
     } else if (response.status === 'not_authorized') {
       // In this case, the person is logged into Facebook, but not into the app, so we call
       // FB.login() to prompt them to do so. 
@@ -66,36 +52,108 @@
       // The same caveats as above apply to the FB.login() call here.
       FB.login();
     }
+   
   });
   };
-
   // Load the SDK asynchronously
   (function(d){
    var js, id = 'facebook-jssdk', ref = d.getElementsByTagName('script')[0];
    if (d.getElementById(id)) {return;}
-   js = d.createElement('script'); js.id = id; js.async = true;
+   js = d.createElement('script'); js.id = id; js.async = false;
    js.src = "//connect.facebook.net/en_US/all.js";
    ref.parentNode.insertBefore(js, ref);
   }(document));
-
-  // Here we run a very simple test of the Graph API after login is successful. 
-  // This testAPI() function is only called in those cases. 
 </script>
--->
+
+
 <script>
-$(document).ready(function() {
-  $.ajaxSetup({ cache: true });
-  $.getScript('//connect.facebook.net/en_US/all/debug.js', function(){
-    FB.init({
-      appId: '632406803445925',
-      channelUrl: 'localhost/mybackboneapp/channel.html',
-    });     
-    $('#loginbutton,#feedbutton').removeAttr('disabled');
-    FB.getLoginStatus(function(response){
-      console.log("login status", response.status);
-    });
+(function($){
+  //Friend Model - these are the parameters that the FQL returns for each result
+   var FriendModel = Backbone.Model.extend({
+    defaults: {
+      uid: "", 
+      pic_square: "", 
+      first_name: "", 
+      last_name: ""
+    }
   });
+
+  var List = Backbone.Collection.extend({
+    model: FriendModel
+  });
+
+//View Template
+FriendView = Backbone.View.extend({
+   el: $('body'), // el attaches to existing element
+  tagName : "li",
+  className : "FriendModel",
+   initialize: function(){
+      _.bindAll(this, 'render'); 
+      this.render();
+    },
+  render : function() {
+  var li ="<li style='list-style-type:none;'><img src="+ this.model.get('pic_square')+
+        "></img><a target='_blank' href='http://www.facebook.com/"+ this.model.get('uid') +"'>"+ this.model.get('first_name')+" "+ this.model.get('last_name')+"</li>";
+  $(this.el).append(li);
+    return this;
+  }
 });
+
+ var   _friendViews ;
+ var ListView = Backbone.View.extend({
+ el: $('body'),
+ events: {
+  'click button#btnGo': 'addItem'
+},
+  initialize: function(){
+  _.bindAll(this, 'render', 'addItem'); // every function that uses 'this' as the current object should be in here
+  this.render();
+},
+  render: function(){
+    var input = this.make('input', {
+      type:'text',
+      id:'txtquery'
+    });
+    $(this.el).append(input);
+    $(this.el).append("<button id='btnGo'>Go</button>");
+    $(this.el).append("<ul'>");
+    
+    // We keep track of the rendered state of the view
+    this._rendered = true;
+    return this;
+    },
+  addItem: function() {
+    if($(txtquery).val().trim().length === 0)
+      {alert("textbox is empty!"); return;}
+    var that = this;
+    //friend collection
+    this._friendViews = [];
+    // console.log("calling api");
+    // FQL query to get friends who like a certain thing
+    var query = 'SELECT uid,pic_square, first_name, last_name from user where uid IN (SELECT uid FROM page_fan WHERE uid IN (SELECT uid2 FROM friend WHERE uid1 = me())AND page_id IN (select page_id FROM page where name = "'+$(txtquery).val()+'")) limit 5';
+    FB.api("/fql?q="+escape(query),function(response){
+      // console.log(response);
+      var fdata = response["data"];
+      var friendsCollection = new Backbone.Collection;
+      for(var key in fdata){
+        var friend = new FriendModel({
+          first_name:fdata[key].first_name
+          ,last_name: fdata[key].last_name
+          ,pic_square: fdata[key].pic_square
+          ,uid: fdata[key].uid
+        });
+        that._friendViews.push(new FriendView({
+          model : friend,
+          tagName : 'li'
+        }));
+      }
+      if(response.error_msg)
+        {alert(response.error_msg);return;}
+    });
+  }
+});
+var listView = new ListView();
+})(jQuery);
 </script>
 <!--
   Below we include the Login Button social plugin. This button uses the JavaScript SDK to
